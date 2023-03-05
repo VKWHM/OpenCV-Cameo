@@ -1,4 +1,5 @@
 import cv2
+from urllib.request import urlopen
 import numpy
 import time
 import logging
@@ -150,12 +151,13 @@ class CaptureManager(object):
 
 class WindowManager(object):
 	
-	def __init__(self, windowName, keypressCallback = None, loggerName = 'WindowManager'):
+	def __init__(self, windowName, keypressCallback = None, windowSize = None, loggerName = 'WindowManager'):
 		self._logger = logging.getLogger(loggerName)
 		self._logger.debug(f'Initial Class {loggerName=}')
 		self.keypressCallback = keypressCallback
 		self._windowName = windowName
 		self._isWindowCreated = False
+		self._windowSize = windowSize
 
 	
 	@property
@@ -164,7 +166,10 @@ class WindowManager(object):
 	
 	def createWindow(self):
 		self._logger.info(f'Create Window as {self._windowName}')
-		cv2.namedWindow(self._windowName)
+		cv2.namedWindow(self._windowName, cv2.WINDOW_NORMAL)
+		if self._windowSize is not None:
+			self._logger.debug(f'Resize window to {self._windowSize}')
+			cv2.resizeWindow(self._windowName, *self._windowSize)
 		self._isWindowCreated = True
 
 	def show(self, frame):
