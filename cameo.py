@@ -1,6 +1,7 @@
 import cv2
 import logging
 import filters
+import argparse
 try:
 	import colorlog
 except ImportError:
@@ -12,10 +13,10 @@ from manager import CaptureManager, WindowManager
 
 
 class Cameo(object):
-	def __init__(self):
-		self._windowManager = WindowManager('Window', self.onKeypress)
-		self._captureManager = CaptureManager(cv2.VideoCapture('test.mp4'), self._windowManager, True)
-		self._curveFilter = filters.SharpenFilter()
+	def __init__(self, Capture):
+		self._windowManager = WindowManager('Window', self.onKeypress, (1340, 700))
+		self._captureManager = CaptureManager(cv2.VideoCapture(Capture), self._windowManager, False)
+		self._curveFilter = filters.FindEdgesFilter()
 
 	def run(self):
 		"""
@@ -27,6 +28,7 @@ class Cameo(object):
 				if frame is not None:
 					#filters.strokeEdges(frame, frame, edgeKsize=5)
 					self._curveFilter.apply(frame, frame)
+					pass
 			self._windowManager.processEvent()
 		return 
 		
@@ -41,9 +43,9 @@ class Cameo(object):
 			self._captureManager.writeImage('screenshot.png')
 		elif keycode == 9: # TAB
 			if not self._captureManager.isWritingVideo:
-				self._captureManager.startWritingVideo('screencast.mp4', cv2.VideoWriter_fourcc(*'MP4V'))
+				self._captureManager.startWriteVideo('screencast.mp4', cv2.VideoWriter_fourcc(*'mp4v'))
 			else:
-				self._captureManager.stopWritingVideo()
+				self._captureManager.stopWriteVideo()
 		elif keycode == 27: # ESC
 			self._windowManager.destroyWindow()
 
@@ -83,7 +85,13 @@ class CameoDepth(Cameo):
 			self._captureManager.exitFrame()
 			self._windowManager.processEvent()
 
+def get_args():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('cap', default=0, help='video file or a capturing device or an IP video stream for video capturing.')
+	parser.add_argument('-l', '--log-level', dest='log', default='warning', choices=['critical', 'error', 'warning', 'info','debug'], help='Level for logging')
+	return vars(parser.parse_args())
 if __name__ == '__main__':
-	colorlog.basicConfig(format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s", level=logging.DEBUG, datefmt='%H:%M:%S')
-	#Cameo().run()
-	CameoDepth().run()
+	cap, log = get_args().values()
+	colorlog.basicConfig(format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s", level=getattr(logging, log.upper()), datefmt='%H:%M:%S')
+	Cameo(cap).run()
+	#CameoDepth().run()
