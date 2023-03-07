@@ -166,7 +166,7 @@ class WindowManager(object):
 	
 	def createWindow(self):
 		self._logger.info(f'Create Window as {self._windowName}')
-		cv2.namedWindow(self._windowName, cv2.WINDOW_NORMAL)
+		cv2.namedWindow(self._windowName)
 		if self._windowSize is not None:
 			self._logger.debug(f'Resize window to {self._windowSize}')
 			cv2.resizeWindow(self._windowName, *self._windowSize)
