@@ -71,10 +71,10 @@ class ZedCameraClass(sl.Camera):
         if self._isOpened:
             self.close()
             self._isOpened = False
-	
-	def distance(self, x, y):
-		depth = self.compute_depth_map()
-		if depth is not None:
-			depth_np = depth.get_data()
-			return depth_np[y,x] / 1000.0
-		return None
+
+    def distance(self, x, y):
+        depth = self.compute_depth_map()
+        if depth is not None:
+            depth_np = depth.get_data()
+            return depth_np[y,x] / 1000.0
+        return None
