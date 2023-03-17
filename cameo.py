@@ -1,6 +1,5 @@
 import cv2
 import logging
-import filters
 import argparse
 
 try:
@@ -11,16 +10,19 @@ except ImportError:
     sys.stderr.write("colorlog Module Is Not Installed !!\n")
     sys.exit(1)
 
+import filters
 from manager import CaptureManager, WindowManager
 from tracker import FaceTracker
+from cvserver import CVServer
 
 
 class Cameo(object):
     def __init__(self, Capture, logger="Cameo"):
         self._logger = logging.getLogger(logger)
-        self._windowManager = WindowManager("Window", self.onKeypress)
+        self._server = CVServer()
+        #self._windowManager = WindowManager("Window", self.onKeypress)
         self._captureManager = CaptureManager(
-            cv2.VideoCapture(Capture), self._windowManager, False
+            cv2.VideoCapture(Capture)
         )
         self._curveFilter = filters.SharpenFilter()
         self._faceTrack = FaceTracker(scaleFactor=1.09, minNeighbors=10)
@@ -30,17 +32,12 @@ class Cameo(object):
         """
         Run Main loop.
         """
-        self._windowManager.createWindow()
-        while self._windowManager.isWindowCreated:
+        self._server.start_server()
+        #self._windowManager.createWindow()
+        while True:
             with self._captureManager as frame:
                 if frame is not None:
-                    if self._shouldTrackingFace:
-                        self._faceTrack.update(frame)
-                        self._faceTrack.drawDebugRects(frame)
-                    # filters.strokeEdges(frame, frame, edgeKsize=5)
-                    # self._curveFilter.apply(frame, frame)
-                    pass
-            self._windowManager.processEvent()
+                    self._server.send_frame(frame)
 
     def onKeypress(self, keycode):
         """
@@ -79,7 +76,7 @@ class CameoDepth(Cameo):
         )
         self._curveFilter = filters.SharpenFilter()
         self._logger = logging.getLogger(loggerName)
-        self._logger.debug(f"Initial Class {loggerName=}")
+        self._logger.debug(f"Initial Class {loggerName}")
 
     def run(self):
         """

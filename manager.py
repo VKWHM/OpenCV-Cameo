@@ -15,7 +15,7 @@ class CaptureManager(object):
         loggerName="CaptureManager",
     ):
         self._logger = logging.getLogger(loggerName)
-        self._logger.debug(f"Initial Class {loggerName=}")
+        self._logger.debug(f"Initial Class {loggerName}")
         self.previewWindowManager = previewWindowManager
         self.shouldMirrorPreview = shouldMirrorPreview
         self.shouldConvertBit10To8 = shouldConvertBit10To8
@@ -117,14 +117,14 @@ class CaptureManager(object):
         """
         Write the next exited frame to an image file.
         """
-        self._logger.debug(f"Set Image File Name {filename=}")
+        self._logger.debug(f"Set Image File Name {filename}")
         self._imageFilename = filename
 
     def startWriteVideo(self, filename, encoding=cv2.VideoWriter_fourcc(*"MJPG")):
         """
         Start writing exited frames to a video file.
         """
-        self._logger.info(f"Start Video Recording Into {filename=}")
+        self._logger.info(f"Start Video Recording Into {filename}")
         self._videoFilename = filename
         self._videoEncoding = encoding
 
@@ -143,13 +143,13 @@ class CaptureManager(object):
         if self._videoWriter is None:
             self._logger.debug(f"Video Writer is none. Initial It...")
             fps = self._capture.get(cv2.CAP_PROP_FPS)
-            self._logger.debug(f"Get FPS from Camera {fps=}")
+            self._logger.debug(f"Get FPS from Camera {fps}")
             if fps <= 0.0:
                 if self._frameElpased < 20:
                     return
                 else:
                     fps = self._fpsEstimate
-                    self._logger.debug(f"Set Estimated FPS {fps=}")
+                    self._logger.debug(f"Set Estimated FPS {fps}")
             size = (
                 int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
                 int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
@@ -170,7 +170,7 @@ class WindowManager(object):
         loggerName="WindowManager",
     ):
         self._logger = logging.getLogger(loggerName)
-        self._logger.debug(f"Initial Class {loggerName=}")
+        self._logger.debug(f"Initial Class {loggerName}")
         self.keypressCallback = keypressCallback
         self._windowName = windowName
         self._isWindowCreated = False
@@ -200,6 +200,6 @@ class WindowManager(object):
     def processEvent(self):
         keycode = cv2.waitKey(1)
         if self.keypressCallback is not None and keycode != -1:
-            self._logger.debug(f"Process Pressed Key {keycode=}")
+            self._logger.debug(f"Process Pressed Key {keycode}")
             self.keypressCallback(keycode)
 

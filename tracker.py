@@ -19,7 +19,7 @@ class FaceTracker(object):
         logger="FaceTracker",
     ):
         self._logger = logging.getLogger(logger)
-        self._logger.debug(f"Initial Class {logger=}")
+        self._logger.debug(f"Initial Class {logger}")
         self.eyeClassifier = cv2.CascadeClassifier("HaarCascades/haarcascade_eye.xml")
         self.faceClassifier = cv2.CascadeClassifier(
             "HaarCascades/haarcascade_frontalface_default.xml"
