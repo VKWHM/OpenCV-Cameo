@@ -10,34 +10,44 @@ except ImportError:
     sys.stderr.write("colorlog Module Is Not Installed !!\n")
     sys.exit(1)
 
+
 import filters
 from manager import CaptureManager, WindowManager
 from tracker import FaceTracker
 from cvserver import CVServer
+from cvclient import CVClient
 
 
 class Cameo(object):
     def __init__(self, Capture, logger="Cameo"):
         self._logger = logging.getLogger(logger)
-        self._server = CVServer()
-        #self._windowManager = WindowManager("Window", self.onKeypress)
+        self._windowManager = WindowManager("Window", self.onKeypress)
         self._captureManager = CaptureManager(
-            cv2.VideoCapture(Capture)
+            Capture,
+            self._windowManager,
         )
-        self._curveFilter = filters.SharpenFilter()
+
         self._faceTrack = FaceTracker(scaleFactor=1.09, minNeighbors=10)
-        self._shouldTrackingFace = False
+        self.shouldTrackingFace = False
+
+        self._curveFilter = filters.SharpenFilter()
+        self.applyFilter = False
 
     def run(self):
         """
         Run Main loop.
         """
-        self._server.start_server()
-        #self._windowManager.createWindow()
-        while True:
+        self._windowManager.createWindow()
+        while self._windowManager.isWindowCreated:
             with self._captureManager as frame:
                 if frame is not None:
-                    self._server.send_frame(frame)
+                    if self.shouldTrackingFace:
+                        self._faceTrack.update(frame)
+                        self._faceTrack.drawDebugRects(frame)
+
+                if self.applyFilter:
+                    self._curveFilter.apply(frame, frame)
+            self._windowManager.processEvent()
 
     def onKeypress(self, keycode):
         """
@@ -56,15 +66,40 @@ class Cameo(object):
                 )
             else:
                 self._captureManager.stopWriteVideo()
+        elif keycode == ord("a"):
+            self._logger.info(
+                "Filter Applying "
+                + ("Started" if not self.applyFilter else "Stoped")
+            )
+            self.applyFilter = not self.applyFilter
         elif keycode == ord("x"):
             self._logger.info(
                 "Face Tracking "
-                + ("Started" if not self._shouldTrackingFace else "Stoped")
+                + ("Started" if not self.shouldTrackingFace else "Stoped")
             )
-            self._shouldTrackingFace = not self._shouldTrackingFace
+            self.shouldTrackingFace = not self.shouldTrackingFace
         elif keycode == 27:  # ESC
             self._windowManager.destroyWindow()
 
+
+class CameoServer(Cameo):
+    def __init__(self, Capture, address='localhost', logger="CameoServer"):
+        self.address = address
+        self._logger = logging.getLogger(logger)
+        self._server = CVServer()
+        self._captureManager = CaptureManager(
+            Capture
+        )
+
+    def run(self):
+        """
+        Run Main loop.
+        """
+        self._server.start_server(self.address)
+        while True:
+            with self._captureManager as frame:
+                if frame is not None:
+                    self._server.send_frame(frame)
 
 class CameoDepth(Cameo):
     def __init__(self, loggerName="CameoDepth"):
@@ -115,6 +150,19 @@ def get_args():
         help="video file or a capturing device or an IP video stream for video capturing.",
     )
     parser.add_argument(
+        "-c",
+        "--client-mode",
+        dest='client',
+        action="store_true",
+        help="Enable Client Mode And Accept Frames From CameoServer Has Address Given On 'cap' Parameter",
+    )
+    parser.add_argument(
+        "-s",
+        "--server",
+        dest='address',
+        help="Enable Server Mode To Start Lisining On The Address Given",
+    )
+    parser.add_argument(
         "-l",
         "--log-level",
         dest="log",
@@ -125,20 +173,28 @@ def get_args():
     parser.add_argument(
         "-d", "--use-depth", dest="depth", action="store_true", help="Use Depth Camera"
     )
-    return vars(parser.parse_args())
+    return parser
 
 
 if __name__ == "__main__":
-    cap, log, depth = get_args().values()
-    if len(cap) < 3:
-        cap = int(cap)
+    parser = get_args()
+    cap, client, address, log, depth = vars(parser.parse_args()).values()
     colorlog.basicConfig(
         format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s",
         level=getattr(logging, log.upper()),
         datefmt="%H:%M:%S",
     )
-    if depth:
+    
+    if len(cap) < 3:
+        cap = int(cap)
+    if client and address:
+        parser.error("Can't Enable Server Mode And Client Mode Same Time")
+    elif client:
+        Cameo(CVClient(cap)).run()
+    elif address:
+        CameoServer(cv2.VideoCapture(cap), address).run()
+    elif depth:
         CameoDepth(cap).run()
     else:
-        Cameo(cap).run()
+        Cameo(cv2.VideoCapture(cap)).run()
 

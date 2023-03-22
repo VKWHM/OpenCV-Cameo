@@ -50,10 +50,14 @@ class CVServer(object):
                 self._client_socket.send(data_length)
                 self._client_socket.send(compressed)
                 self._logger.debug(f"Send Frame Has {len(compressed)} Size To Client")
+                self._logger.debug(f"Wait Recv")
+                self._client_socket.recv(2048)
             except:
                 self._logger.info(
                     f"{self.address_info[0]}:{self.address_info[1]} Connection Ended"
                 )
+                del self._queue
+                self._queue = queue.Queue()
                 self._client_socket = None
         else:
             self.accept_thread = threading.Thread(

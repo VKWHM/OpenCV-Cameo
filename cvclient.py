@@ -11,7 +11,7 @@ class CVClient:
         self._logger = logging.getLogger(logger)
         self._logger.debug(f"Initial Class {logger}")
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._frame_buffer = bytearray(1024 * 1024 * 10)
+        self._frame_buffer =None
         self._grabed = False
         try:
             self._socket.connect((host, port))
@@ -35,7 +35,10 @@ class CVClient:
                 self._isOpened = False
                 return False
             self._frame_size = struct.unpack("!I", header)[0]
-            self._socket.recv_into(self._frame_buffer, self._frame_size)
+            self._frame_buffer = self._socket.recv(self._frame_size)
+            while self._frame_size - len(self._frame_buffer) > 0:
+                self._frame_buffer += self._socket.recv(self._frame_size)
+            self._socket.send('ok'.encode('utf-8'))
             self._grabed = True
             self._logger.debug(f"Received Frame Has {self._frame_size} Size")
         return self._grabed
@@ -43,9 +46,10 @@ class CVClient:
     def retrieve(self, *args, **kwargs):
         if self._grabed:
             frame_data = numpy.frombuffer(
-                zlib.decompress(self._frame_buffer[: self._frame_size]),
+                    zlib.decompress(self._frame_buffer),
                 dtype=numpy.uint8,
             )
+            self._logger.debug(f'Decode Frame')
             frame = cv2.imdecode(frame_data, cv2.IMREAD_UNCHANGED)
             self._grabed = False
             return True, frame

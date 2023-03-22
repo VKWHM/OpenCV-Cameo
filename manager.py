@@ -18,6 +18,8 @@ class CaptureManager(object):
         self._logger.debug(f"Initial Class {loggerName}")
         self.previewWindowManager = previewWindowManager
         self.shouldMirrorPreview = shouldMirrorPreview
+        if shouldMirrorPreview:
+            self._logger.debug(f"Mirror Frame {self._frameElpased}")
         self.shouldConvertBit10To8 = shouldConvertBit10To8
         self._capture = capture
         self._channel = 0
@@ -93,12 +95,11 @@ class CaptureManager(object):
             self._startTime = time.time()
         else:
             timeElpased = time.time()
-            self._fpsEstimate = self._frameElpased / timeElpased - self._startTime
+            self._fpsEstimate = self._frameElpased / (timeElpased - self._startTime)
         self._frameElpased += 1
 
         if self.previewWindowManager is not None:
             if self.shouldMirrorPreview:
-                self._logger.debug(f"Mirror Frame {self._frameElpased}")
                 mirroredFrame = numpy.fliplr(self._frame)
                 self.previewWindowManager.show(mirroredFrame)
             else:
@@ -144,16 +145,19 @@ class CaptureManager(object):
             self._logger.debug(f"Video Writer is none. Initial It...")
             fps = self._capture.get(cv2.CAP_PROP_FPS)
             self._logger.debug(f"Get FPS from Camera {fps}")
-            if fps <= 0.0:
+            if fps is None or (fps is not None and fps <= 0.0):
                 if self._frameElpased < 20:
                     return
                 else:
-                    fps = self._fpsEstimate
+                    fps = int(self._fpsEstimate)
                     self._logger.debug(f"Set Estimated FPS {fps}")
-            size = (
-                int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            )
+            try:
+                size = (
+                    int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                )
+            except TypeError:
+                size = self._frame.shape[:2][::-1]
             self._videoWriter = cv2.VideoWriter(
                 self._videoFilename, self._videoEncoding, fps, size
             )
