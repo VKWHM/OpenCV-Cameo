@@ -69,7 +69,7 @@ class EmpossFilter(VConvolutionFilter):
     An emboos filter with a 1-pixel radius.
     """
 
-    def __init_(self):
+    def __init__(self):
         kernel = numpy.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]])
         super().__init__(kernel)
 

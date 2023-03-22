@@ -1,4 +1,5 @@
 import cv2
+import os
 import utils
 import logging
 
@@ -19,7 +20,7 @@ class FaceTracker(object):
         logger="FaceTracker",
     ):
         self._logger = logging.getLogger(logger)
-        self._logger.debug(f"Initial Class {logger}")
+        self._logger.debug(f"Initial Class {logger=}")
         self.eyeClassifier = cv2.CascadeClassifier("HaarCascades/haarcascade_eye.xml")
         self.faceClassifier = cv2.CascadeClassifier(
             "HaarCascades/haarcascade_frontalface_default.xml"
@@ -102,3 +103,47 @@ class FaceTracker(object):
                     image, getattr(face, attribute), colors.get(attribute, 255)
                 )
 
+
+
+class ObjectTracker(object):
+    def __init__(
+        self,
+        classifier,
+        scaleFactor=1.3,
+        minNeighbors=2,
+        flags=cv2.CASCADE_SCALE_IMAGE,
+        logger="ObjectTracker"
+    ):
+        self._logger = logging.getLogger(logger)
+        self.scaleFactor = scaleFactor
+        self.minNeighbors = minNeighbors
+        self.flags = flags
+        if not (os.path.exists(classifier) and os.path.isfile(classifier)):
+            self._logger.error('The Cascade Classifier File Not Exist')
+            self.classifier = None
+            return 
+        self.classifier = cv2.CascadeClassifier(classifier)
+        self._detectedObjRect = []
+
+    @property
+    def objects(self):
+        return self._detectedObjRect
+
+    def update(self, image):
+        if utils.isGray(image):
+            image = cv2.equalizeHist(image)
+        else:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            image = cv2.equalizeHist(gray)
+        objRect = self.classifier.detectMultiScale(
+            image, self.scaleFactor, self.minNeighbors, self.flags, (100,100)
+        )
+
+        if objRect is not None:
+            self._detectedObjRect = objRect
+            return True
+        return False
+
+    def drawDebugRects(self, image):
+        for obj in self._detectedObjRect:
+            utils.outlineRect(image, obj, 255)
