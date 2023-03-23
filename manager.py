@@ -18,8 +18,6 @@ class CaptureManager(object):
         self._logger.debug(f"Initial Class {loggerName}")
         self.previewWindowManager = previewWindowManager
         self.shouldMirrorPreview = shouldMirrorPreview
-        if shouldMirrorPreview:
-            self._logger.debug(f"Mirror Frame {self._frameElpased}")
         self.shouldConvertBit10To8 = shouldConvertBit10To8
         self._capture = capture
         self._channel = 0
@@ -32,6 +30,8 @@ class CaptureManager(object):
         self._fpsEstimate = None
         self._startTime = None
         self._videoWriter = None
+        if shouldMirrorPreview:
+            self._logger.debug(f"Mirror Frame Enabled")
 
     def __enter__(self):
         self.enterFrame()

@@ -320,15 +320,12 @@ def get_args():
         choices=["critical", "error", "warning", "info", "debug"],
         help="Level for logging",
     )
-    parser.add_argument(
-        "-d", "--use-depth", dest="depth", action="store_true", help="Use Depth Camera"
-    )
     return parser
 
 
 if __name__ == "__main__":
     parser = get_args()
-    cap, label, client, classifier, address, trash, log, depth = vars(parser.parse_args()).values()
+    cap, label, client, classifier, address, trash, log = vars(parser.parse_args()).values()
     colorlog.basicConfig(
         format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s",
         level=getattr(logging, log.upper()),
@@ -337,6 +334,8 @@ if __name__ == "__main__":
     
     if len(cap) < 3:
         cap = int(cap)
+    elif cap == 'csi':
+        cap = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1024, height=768,format=NV12 ,framerate=30/1 ! nvvidconv flip-method=2 ! video/x-raw, width=640, height=480, format=BGRx ! videoconvert ! video/x-raw, format=BGR ! appsink'
     if client and address:
         parser.error("Can't Enable Server Mode And Client Mode Same Time")
     elif client:
@@ -348,8 +347,8 @@ if __name__ == "__main__":
         CameoLabelTaker(cv2.VideoCapture(cap)).run()
     elif address:
         CameoServer(cv2.VideoCapture(cap), address).run()
-    elif depth:
-        CameoDepth(cv2.VideoCapture(cap)).run()
+    elif cap == 'zed':
+        CameoDepth().run()
     else:
         if classifier:
             Cameo(cv2.VideoCapture(cap), detect=classifier, trashold=trash).run()
