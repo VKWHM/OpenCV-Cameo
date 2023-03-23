@@ -13,5 +13,5 @@ def WHDividedBy(image, divisor):
 def outlineRect(image, Rect, Color):
     if Rect is not None:
         x, y, w, h = Rect
-        cv2.rectangle(image, (x, y), (x + w, y + h), Color, 5)
+        cv2.rectangle(image, (x, y), (x + w, y + h), Color, 2)
 

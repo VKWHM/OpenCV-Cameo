@@ -1,6 +1,7 @@
 import cv2
 import logging
 import argparse
+import os
 
 try:
     import colorlog
@@ -12,6 +13,7 @@ except ImportError:
 
 
 import filters
+import utils
 from manager import CaptureManager, WindowManager
 from tracker import FaceTracker, ObjectTracker
 from cvserver import CVServer
@@ -119,10 +121,27 @@ class Cameo(object):
 class CameoLabelTaker(object):
     def __init__(self, Capture, logger="Cameo", *args, **kwargs):
         self._logger = logging.getLogger(logger)
-        self._windowManager = WindowManager("Window", self.onKeypress, (1200, 800))
+        self._windowManager = WindowManager("Window", self.onKeypress)
         self._captureManager = CaptureManager(
             Capture, self._windowManager, False
         )
+        self.takeSS = False
+        self.filepath = 'takedImages'
+        self.p_count = 0
+        self.n_count = 0
+        for filepath in [f"{self.filepath}/negative", f"{self.filepath}/positive"]:
+            if not os.path.exists(filepath):
+                os.makedirs(filepath)
+            else:
+                count = 0
+                for file in os.listdir(filepath):
+                    if (l := int(file.split('.')[0])) >= count:
+                        count = l + 1
+                if filepath[len(self.filepath) + 1:] == 'positive':
+
+                    self.p_count = count
+                else:
+                    self.n_count = count
 
     def run(self):
         """
@@ -130,29 +149,18 @@ class CameoLabelTaker(object):
         """
         self.rectSize = (400, 400, 200, 200)
         self._windowManager.createWindow()
-        self.takeScreenShot = False
-        filepath = 'takedImages/p'
-        count = 1
-        if not os.path.exists(filepath):
-            os.makedirs(filepath)
-        else:
-            for file in os.listdir(filepath):
-                if (l := int(file.split('.')[0])) >= count:
-                    count = l + 1
         while self._windowManager.isWindowCreated:
             x, y, w, h = self.rectSize
             with self._captureManager as frame:
                 if frame is not None:
-                    cv2.putText(frame, 'Count For Image: {}'.format(count), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    if self.takeScreenShot:
-                        img = cv2.resize(frame[y:y+h, x:x+w], (24,24))
-                        cv2.imwrite(f'{filepath}/{count}.jpg', img)
-                        self.takeScreenShot = not self.takeScreenShot
-                        cv2.rectangle(frame,(x, y), (x+w, y+h), (0,0,255), 1)
-                        count += 1
+                    cv2.putText(frame, 'Count For Positive Image: {}'.format(self.p_count), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(frame, 'Count For Negative Image: {}'.format(self.n_count), (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    if self.takeSS:
+                        cv2.imwrite(self.file, frame)
+                        self.takeSS = not self.takeSS
+                        utils.outlineRect(frame, self.rectSize, (0,255,0))
                     else:
-                        cv2.rectangle(frame,(x, y), (x+w, y+h), (255,0,0), 1)
-                    pass
+                        utils.outlineRect(frame, self.rectSize, (255,0,0))
             self._windowManager.processEvent()
 
     def onKeypress(self, keycode):
@@ -179,14 +187,28 @@ class CameoLabelTaker(object):
         elif keycode == 81:
             x, y, w, h = self.rectSize
             self.rectSize = (x-a, y, w, h)
-        elif keycode == ord('g'):
+        elif keycode == ord('h'):
             x, y, w, h = self.rectSize
-            self.rectSize = (x, y, w+a, h+a)
-        elif keycode == ord('s'):
+            self.rectSize = (x-a, y, w+a, h)
+        elif keycode == ord('j'):
             x, y, w, h = self.rectSize
-            self.rectSize = (x, y, w-a, h-a)
+            self.rectSize = (x, y, w, h+a)
+        elif keycode == ord('k'):
+            x, y, w, h = self.rectSize
+            self.rectSize = (x, y, w, h-a)
+        elif keycode == ord('l'):
+            x, y, w, h = self.rectSize
+            self.rectSize = (x+a, y, w-a, h)
+        elif keycode == ord('n'):
+            self.file = f'{self.filepath}/negative/{self.n_count}.jpg'
+            open(f'{self.filepath}/neg.txt', 'a').write(f'negative/{self.n_count}.jpg\n')
+            self.n_count += 1
+            self.takeSS = not self.takeSS
         elif keycode == ord('t'):
-            self.takeScreenShot = not self.takeScreenShot
+            self.file = f'{self.filepath}/positive/{self.p_count}.jpg'
+            open(f"{self.filepath}/pos.txt", 'a').write(f"positive/{self.p_count}.jpg 1 {' '.join([str(x) for x in self.rectSize])}\n")
+            self.p_count += 1
+            self.takeSS = not self.takeSS
 
 
 class CameoServer(Cameo):
@@ -261,7 +283,7 @@ def get_args():
         "--image-label",
         dest='label',
         action="store_true",
-        help="Enable Client Mode And Accept Frames From CameoServer Has Address Given On 'cap' Parameter",
+        help="Enable Samples Takin And Labeling Mode",
     )
     parser.add_argument(
         "-c",
