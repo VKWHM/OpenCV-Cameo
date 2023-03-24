@@ -3,15 +3,6 @@ import logging
 import argparse
 import os
 
-try:
-    import colorlog
-except ImportError:
-    import sys
-
-    sys.stderr.write("colorlog Module Is Not Installed !!\n")
-    sys.exit(1)
-
-
 import filters
 import utils
 from manager import CaptureManager, WindowManager
@@ -135,7 +126,8 @@ class CameoLabelTaker(object):
             else:
                 count = 0
                 for file in os.listdir(filepath):
-                    if (l := int(file.split('.')[0])) >= count:
+                    l = int(file.split('.')[0])
+                    if l >= count:
                         count = l + 1
                 if filepath[len(self.filepath) + 1:] == 'positive':
 
@@ -326,12 +318,21 @@ def get_args():
 if __name__ == "__main__":
     parser = get_args()
     cap, label, client, classifier, address, trash, log = vars(parser.parse_args()).values()
-    colorlog.basicConfig(
-        format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s",
-        level=getattr(logging, log.upper()),
-        datefmt="%H:%M:%S",
-    )
-    
+    try:
+        import colorlog
+        colorlog.basicConfig(
+            format="[%(asctime)s.%(msecs)03d] [%(log_color)s%(levelname)s%(reset)s] (%(name)s): %(log_color)s%(message)s%(reset)s",
+            level=getattr(logging, log.upper()),
+            datefmt="%H:%M:%S",
+        )
+    except ImportError:
+        logging.basicConfig(
+            format="[%(asctime)s.%(msecs)03d] [%(levelname)s] (%(name)s): %(message)s",
+            level=getattr(logging, log.upper()),
+            datefmt="%H:%M:%S",
+        )
+        logging.warning('Colorlog Is Not Installed!!')
+
     if len(cap) < 3:
         cap = int(cap)
     elif cap == 'csi':

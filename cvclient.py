@@ -1,4 +1,5 @@
 import logging
+import pickle
 import socket
 import zlib
 import struct
@@ -62,6 +63,13 @@ class CVClient:
 
     def get(self, *args, **kwargs):
         return None
+
+    def send_order(self, order):
+        if self._isOpened:
+            data = pickle.dumps(order)
+            data_length = struct.pack('!I', len(data))
+            self._socket.send(data_length)
+            self._socket.send(data)
 
     def release(self):
         if self._isOpened:
