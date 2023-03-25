@@ -4,6 +4,6 @@
 *.mp4
 *.avi
 __pycache__
-takedImages
+takedImages*
 .*
 

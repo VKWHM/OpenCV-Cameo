@@ -1,6 +1,7 @@
 import cv2
 import logging
 import argparse
+import shutil
 import os
 
 import filters
@@ -196,11 +197,14 @@ class CameoLabelTaker(object):
             open(f'{self.filepath}/neg.txt', 'a').write(f'negative/{self.n_count}.jpg\n')
             self.n_count += 1
             self.takeSS = not self.takeSS
-        elif keycode == ord('t'):
+        elif keycode == ord('p'):
             self.file = f'{self.filepath}/positive/{self.p_count}.jpg'
             open(f"{self.filepath}/pos.txt", 'a').write(f"positive/{self.p_count}.jpg 1 {' '.join([str(x) for x in self.rectSize])}\n")
             self.p_count += 1
             self.takeSS = not self.takeSS
+        elif keycode == ord('s'):
+            self._logger.info(f'Archive Images To {self.filepath}.tar.gz')
+            shutil.make_archive(self.filepath, 'gztar', self.filepath)
 
 
 class CameoServer(Cameo):
