@@ -45,7 +45,7 @@ class CVServer(object):
         self, frame
     ):
         if self.connected:
-            ret, encoded_frame = cv2.imencode(".jpeg", frame)
+            ret, encoded_frame = cv2.imencode('.jpeg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
             self._queue.put(encoded_frame.tobytes())
 
     def _send(self):
@@ -70,7 +70,7 @@ class CVServer(object):
                     data_length = struct.pack("!I", len(compressed))
                     write.send(data_length)
                     write.send(compressed)
-                    self._logger.debug(f"Send Frame Has {len(compressed)} Size To Client")
+                    self._logger.debug(f"Send Frame Has {len(compressed)//1024}K Size To Client")
                     self._logger.debug(f"Wait Recv")
                     write.recv(len('ok'.encode('utf-8')))
 

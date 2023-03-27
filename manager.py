@@ -41,6 +41,10 @@ class CaptureManager(object):
         self.exitFrame()
 
     @property
+    def fps(self):
+        return "{:.2f} FPS".format(self._fpsEstimate) if self._fpsEstimate is not None else "0.0 FPS"
+
+    @property
     def channel(self):
         return self._channel
 
@@ -163,6 +167,7 @@ class CaptureManager(object):
             )
         self._logger.debug(f"Write Frame {self._frameElpased}")
         self._videoWriter.write(self._frame)
+
 
 
 class WindowManager(object):

@@ -41,7 +41,7 @@ class CVClient:
                 self._frame_buffer += self._socket.recv(self._frame_size)
             self._socket.send('ok'.encode('utf-8'))
             self._grabed = True
-            self._logger.debug(f"Received Frame Has {self._frame_size} Size")
+            self._logger.debug(f"Received Frame Has {self._frame_size//1024}K Size")
         return self._grabed
 
     def retrieve(self, *args, **kwargs):

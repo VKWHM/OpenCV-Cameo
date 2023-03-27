@@ -36,10 +36,14 @@ class Cameo(object):
         """
         Run Main loop.
         """
+        self._showFPS = False
         self._windowManager.createWindow()
         while self._windowManager.isWindowCreated:
             with self._captureManager as frame:
                 if frame is not None:
+                    if self._showFPS:
+                        fps_text = self._captureManager.fps
+                        cv2.putText(frame, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                     if self.shouldTrackingFace:
                         self._faceTrack.update(frame)
                         self._faceTrack.drawDebugRects(frame)
@@ -69,7 +73,7 @@ class Cameo(object):
                 )
             else:
                 self._captureManager.stopWriteVideo()
-        elif keycode in [ord('b'), ord('s'), ord('e'), ord('f')]:
+        elif keycode in [ord('b'), ord('s'), ord('e'), ord('d')]:
             if keycode == ord("b"):
                 self._logger.info(
                     "Blur Filter Applying "
@@ -88,13 +92,17 @@ class Cameo(object):
                     + ("Started" if not self.applyFilter else "Stoped")
                 )
                 self._curveFilter = filters.EmpossFilter()
-            elif keycode == ord("f"):
+            elif keycode == ord("d"):
                 self._logger.info(
                     "Find Edged Filter Applying "
                     + ("Started" if not self.applyFilter else "Stoped")
                 )
                 self._curveFilter = filters.FindEdgesFilter()
             self.applyFilter = not self.applyFilter
+
+        elif keycode == ord("f"):
+            self._showFPS = not self._showFPS
+
         elif keycode == ord("j"):
             self._logger.info(
                 "Object Tracking "
@@ -146,14 +154,14 @@ class CameoLabelTaker(object):
             x, y, w, h = self.rectSize
             with self._captureManager as frame:
                 if frame is not None:
-                    cv2.putText(frame, 'Count For Positive Image: {}'.format(self.p_count), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(frame, 'Count For Negative Image: {}'.format(self.n_count), (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                     if self.takeSS:
-                        cv2.imwrite(self.file, frame)
+                        cv2.imwrite(self.file, cv2.resize(frame, (640, 480)))
                         self.takeSS = not self.takeSS
                         utils.outlineRect(frame, self.rectSize, (0,255,0))
                     else:
                         utils.outlineRect(frame, self.rectSize, (255,0,0))
+                    cv2.putText(frame, 'Count For Positive Image: {}'.format(self.p_count), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(frame, 'Count For Negative Image: {}'.format(self.n_count), (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             self._windowManager.processEvent()
 
     def onKeypress(self, keycode):
