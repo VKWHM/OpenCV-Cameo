@@ -12,24 +12,41 @@ import threading
 
 
 class CVServer(object):
-    def __init__(
-        self,
-        rcQueue = None,
-        logger="CVServer"
-    ):
+    DATA_LENGTH = 4
+    TYPE_LENGTH = 1
+    TY_RECEIVER = 0
+    TY_SENDER = 1
+    TY_OK = 2
+
+    def __init__(self, logger="CVServer"):
         self._logger = logging.getLogger(logger)
         self._logger.debug(f"Initial Class {logger}")
-        self.rcQueue = rcQueue
-        if rcQueue is None:
-            self._logger.warning('The Receive Queue Is Not Givin, Client Sends Will Be Ignore')
+        self._is_running = False
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._client_socket = None
+        self._receiver_connected = False
+        self._sender_connected = False
         self._queue = queue.Queue()
 
     @property
-    def connected(self):
-        return self._client_socket is not None
+    def is_server_running(self):
+        return self._is_running
+
+    @property
+    def is_sender_connected(self):
+        return self._sender_connected
+
+    @property
+    def is_receiver_connected(self):
+        return self._receiver_connected
+
+    def stop_server(self):
+        self._receiver_connected = False
+        self._sender_connected = False
+        self._is_running = False
+        self.accept_thread.join()
+        self.recv_thread.join()
+        self.send_thread.join()
 
     def __del__(self):
         self._socket.close()
@@ -38,66 +55,95 @@ class CVServer(object):
         self._socket.bind((host, port))
         self._socket.listen(1)
         self._logger.info(f"Start Lisining Into {host}:{port}")
+        self._is_running = True
         self.accept_thread = threading.Thread(target=self._accept_client, daemon=True)
         self.accept_thread.start()
 
-    def send_frame(
-        self, frame
-    ):
-        if self.connected:
-            ret, encoded_frame = cv2.imencode('.jpeg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-            self._queue.put(encoded_frame.tobytes())
+    def send_frame(self, frame):
+        if self.is_receiver_connected:
+            if self._queue.empty():
+                ret, encoded_frame = cv2.imencode(
+                    ".jpeg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                )
+                self._queue.put(encoded_frame.tobytes())
 
-    def _send(self):
-        while self.connected:
-            read_socket, write_socket, exceptions =  select.select([self._client_socket], [self._client_socket], [self._client_socket])
+    def _recv(self, socket):
+        socket, address = socket
+        while self.is_sender_connected:
+            header = socket.recv(CVServer.DATA_LENGTH)
+            if not header:
+                self._sender_connected = False
+                break
+            data_length = struct.unpack("!I", header)[0]
+            data = socket.recv(data_length)
+            while data_length > len(data):
+                data += socket.recv(data_length - len(data))
+            orders = pickle.loads(data)
+            print(orders)
+        else:
+            socket.close()
+
+    def _send(self, socket):
+        socket, address = socket
+        while self.is_receiver_connected:
             try:
-                for read in read_socket:
-                    received_data = b''
-                    data = read.recv(4)
-                    if not len(data):
-                        continue
-                    header = struct.unpack("!I", data)[0]
-                    received_data = read.recv(header)
-                    while header - len(received_data) > 0:
-                        received_data += read.recv(header - len(received_data))
-                    if self.rcQueue is not None:
-                        self.rcQueue.put(pickle.loads(received_data))
-
-                for write in write_socket:
-                    frame = self._queue.get()
-                    compressed = zlib.compress(frame)
-                    data_length = struct.pack("!I", len(compressed))
-                    write.send(data_length)
-                    write.send(compressed)
-                    self._logger.debug(f"Send Frame Has {len(compressed)//1024}K Size To Client")
-                    self._logger.debug(f"Wait Recv")
-                    write.recv(len('ok'.encode('utf-8')))
+                frame = self._queue.get()
+                compressed = zlib.compress(frame)
+                data_length = struct.pack("!I", len(compressed))
+                socket.send(data_length)
+                socket.send(compressed)
+                self._logger.debug(
+                    f"Send Frame Has {len(compressed)//1024}K Size To Client"
+                )
+                self._logger.debug(f"Wait Recv")
+                socket.recv(CVServer.TYPE_LENGTH)
 
             except Exception as e:
-                self._logger.warning(e)
-                exceptions.append(e)
-
-            if len(exceptions):
-                self._logger.info(
-                    f"{self.address_info[0]}:{self.address_info[1]} Connection Ended"
-                )
+                self._logger.error(e)
+                self._logger.info(f"{address[0]}:{address[1]} Connection Ended")
                 del self._queue
                 self._queue = queue.Queue()
-                self._client_socket = None
+                self._receiver_connected = False
         else:
-            self.accept_thread = threading.Thread(
-                target=self._accept_client, daemon=True
-            )
-            self.accept_thread.start()
+            socket.close()
 
     def _accept_client(self):
-        self._logger.debug(f"Wait Client To Connect...")
-        self._client_socket, self.address_info = self._socket.accept()
-        self._logger.info(
-            f"Accepted Client From {self.address_info[0]}:{self.address_info[1]}"
-        )
-        self.send_thread = threading.Thread(target=self._send, daemon=True)
-        self.send_thread.start()
-        return
+        while self._is_running:
+            self._logger.debug(f"Wait Client To Connect...")
+            client, info = self._socket.accept()
+            self._logger.info(f"Accepted Client From {info[0]}:{info[1]}")
+            type_data = client.recv(CVServer.TYPE_LENGTH)
+            client_type = struct.unpack("!b", type_data)[0]
+
+            if client_type == CVServer.TY_RECEIVER:
+                self._logger.debug("Client Is Receiver Type")
+                if not self._receiver_connected:
+                    self._receiver_connected = True
+                    socket = (client, info)
+                    self.send_thread = threading.Thread(
+                        target=self._send, args=(socket,), daemon=True
+                    )
+                    self.send_thread.start()
+                else:
+                    self._logger.warning(
+                        "Receiver Type Client Aleardy Accepted, Deny..."
+                    )
+                    client.close()
+            elif client_type == CVServer.TY_SENDER:
+                self._logger.debug("Client Is Sender Type")
+                if not self._sender_connected:
+                    self._sender_connected = True
+                    socket = (client, info)
+                    self.recv_thread = threading.Thread(
+                        target=self._recv, args=(socket,), daemon=True
+                    )
+                    self.recv_thread.start()
+                else:
+                    self._logger.warning("Sender Type Client Aleardy Accepted, Deny...")
+                    client.close()
+            else:
+                self._logger.error(f"Unknown Client")
+                client.close()
+        else:
+            self._socket.close()
 
