@@ -58,7 +58,9 @@ class CaptureManager(object):
     def frame(self):
         if self._enteredFrame and self._frame is None:
             self._logger.debug(f"Retrieve Frame From Channel {self._channel}")
-            _, self._frame = self._capture.retrieve(self._frame, self._channel)
+            status, self._frame = self._capture.retrieve(self._frame, self._channel)
+            if status is None:
+                return None
             if self.shouldConvertBit10To8 and self._frame is not None:
                 if self._frame.dtype == numpy.uint16:
                     self._logger.debug(f"Convert Frame Bit From 10 To 8")
@@ -85,7 +87,6 @@ class CaptureManager(object):
                 raise cv2.error(
                     "The device not opened. Make sure the device is working"
                 )
-            self._logger.debug(f"Grabing Frame From")
             self._enteredFrame = self._capture.grab()
 
     def exitFrame(self):

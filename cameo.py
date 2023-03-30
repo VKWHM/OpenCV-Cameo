@@ -2,6 +2,7 @@ import cv2
 import logging
 import argparse
 import shutil
+import time
 import os
 
 import filters
@@ -219,7 +220,7 @@ class CameoServer(Cameo):
     def __init__(self, Capture, address='localhost', logger="CameoServer"):
         self.address = address
         self._logger = logging.getLogger(logger)
-        self._server = CVServer()
+        self._server = CVClient()
         self._captureManager = CaptureManager(
             Capture
         )
@@ -228,11 +229,18 @@ class CameoServer(Cameo):
         """
         Run Main loop.
         """
-        self._server.start_server(self.address)
-        while True:
-            with self._captureManager as frame:
-                if frame is not None:
-                    self._server.send_frame(frame)
+        self._server.connect()
+        a = time.time()
+        try:
+            while True:
+                with self._captureManager as frame:
+                    if frame is not None:
+                        self._server.send_frame(frame)
+                    if not self._server.is_connected:
+                        self._server.connect()
+        except KeyboardInterrupt:
+            self._server.disconnect()
+            return
 
 class CameoDepth(Cameo):
     def __init__(self, loggerName="CameoDepth"):
@@ -353,9 +361,9 @@ if __name__ == "__main__":
         parser.error("Can't Enable Server Mode And Client Mode Same Time")
     elif client:
         if classifier:
-            Cameo(CVClient(cap), detect=classifier, trashold=trash).run()
+            Cameo(CVServer(cap), detect=classifier, trashold=trash).run()
         else:
-            Cameo(CVClient(cap)).run()
+            Cameo(CVServer(cap)).run()
     elif label:
         CameoLabelTaker(cv2.VideoCapture(cap)).run()
     elif address:
