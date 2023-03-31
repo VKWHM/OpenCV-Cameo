@@ -9,7 +9,7 @@ import ctypes
 import queue
 import threading
 
-HEADER_LENGTH = 5
+HEADER_LENGTH = struct.calcsize('!BI')
 TYPE_LENGTH = 1
 CHUNK_SIZE = 60000
 

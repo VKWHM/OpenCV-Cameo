@@ -58,9 +58,7 @@ class CaptureManager(object):
     def frame(self):
         if self._enteredFrame and self._frame is None:
             self._logger.debug(f"Retrieve Frame From Channel {self._channel}")
-            status, self._frame = self._capture.retrieve(self._frame, self._channel)
-            if status is None:
-                return None
+            _, self._frame = self._capture.retrieve(self._frame, self._channel)
             if self.shouldConvertBit10To8 and self._frame is not None:
                 if self._frame.dtype == numpy.uint16:
                     self._logger.debug(f"Convert Frame Bit From 10 To 8")
@@ -87,6 +85,7 @@ class CaptureManager(object):
                 raise cv2.error(
                     "The device not opened. Make sure the device is working"
                 )
+            self._logger.debug(f"Grabing Frame From")
             self._enteredFrame = self._capture.grab()
 
     def exitFrame(self):
@@ -182,6 +181,7 @@ class WindowManager(object):
         self._logger = logging.getLogger(loggerName)
         self._logger.debug(f"Initial Class {loggerName}")
         self.keypressCallback = keypressCallback
+        self.full_screen = False
         self._windowName = windowName
         self._isWindowCreated = False
         self._windowSize = windowSize
@@ -211,5 +211,5 @@ class WindowManager(object):
         keycode = cv2.waitKey(1)
         if self.keypressCallback is not None and keycode != -1:
             self._logger.debug(f"Process Pressed Key {keycode}")
-            self.keypressCallback(keycode)
+            self.keypressCallback(self._windowName, keycode)
 

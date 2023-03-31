@@ -12,7 +12,7 @@ import threading
 import random
 import ctypes
 
-HEADER_LENGTH = 13
+HEADER_LENGTH = struct.calcsize('!BdI')
 TYPE_LENGTH = 1
 
 TY_OPEN = 3
@@ -45,6 +45,12 @@ class CVServer(object):
         
 
     @property
+    def clients(self):
+        for key, value in self._clients.items():
+            if value.get('status') is True:
+                yield key
+    
+    @property
     def is_running(self):
         return self._is_running
 
@@ -54,16 +60,23 @@ class CVServer(object):
         while not self._clients:
             time.sleep(1)
         else:
-            return True
+            for key, value in self._clients.items():
+                if value.get('status') == True:
+                    return True
+        return False
 
+    def stop_server(self):
+        self._is_running = False
+        return self.is_running
 
     def start_server(self):
         self._socket.bind((self.host, self.port))
         self._is_running = True
+        self._logger.info("Start Server To Lisening Incoming Connection")
         threading.Thread(target=self._receiver, daemon=True).start()
 
     def grab(self, *args, **kwargs):
-        if not self._queue.empty():
+        if len(list(self.clients)):
             self._frame_buffer = self._queue.get()
             self._grabed = True
         return self._grabed
@@ -77,11 +90,12 @@ class CVServer(object):
                     dtype=numpy.uint8,
                 )
             except zlib.error:
+                self._logger.debug("Can't retrieve Frame. Decompress Error")
                 return None, numpy.empty([0, 0], dtype=numpy.uint8)
             frame = cv2.imdecode(frame_data, cv2.IMREAD_UNCHANGED)
             self._grabed = False
             return client_id, frame
-        self._logger.debug("Can't retrieve. Frame don't grabbed")
+        
         return None, numpy.empty([0, 0], dtype=numpy.uint8)
 
     def read(self, *args, **kwargs):
@@ -94,6 +108,7 @@ class CVServer(object):
     def send_order(self, client_id, order):
         if client_id in self._clients.keys() and self._clients[client_id]['status']:
             try:
+                self._logger.info(f"Send {order} Orders To {client_id}")
                 data = pickle.dumps(order)
                 header = struct.pack("!BI", TY_RESULT, len(data))
                 self._socket.sendto(header, self._clients[client_id]['address'])
