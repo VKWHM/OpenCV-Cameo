@@ -8,10 +8,10 @@ import cv2
 import ctypes
 import queue
 import threading
+import time
 
 HEADER_LENGTH = struct.calcsize('!BI')
 TYPE_LENGTH = 1
-CHUNK_SIZE = 60000
 
 TY_OPEN = 3
 TY_CLOSE = 6
@@ -35,7 +35,7 @@ class CVClient:
         self._logger.debug(f"Initial Class {logger}")
         self.server_address = (host, port)
         self._queue = queue.Queue()
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(5)
         self._connection_established = False
         self._orders = queue.Queue()
@@ -45,23 +45,27 @@ class CVClient:
         if self._connection_established:
             self._logger.info("Disconnected With Server")
             self._connection_established = False
-            self._socket.sendto(struct.pack('!BdI', TY_CLOSE, self._id, 0), self.server_address)
+            self._socket.send(struct.pack('!BdI', TY_CLOSE, self._id, 0))
+            self._socket.close()
 
     def connect(self):
         try:
-            self._socket.sendto(struct.pack("!BdI", TY_OPEN, self._id if self._id is not None else 0, 0), self.server_address)
-            data, _ = self._socket.recvfrom(HEADER_LENGTH)
+            self._socket.connect(self.server_address)
+            self._socket.send(struct.pack("!BdI", TY_OPEN, self._id if self._id is not None else 0, 0))
+            data = self._socket.recv(HEADER_LENGTH)
             header = Pkt(*struct.unpack('!BI', data))
             if header.type == TY_OK:
-                self._id = struct.unpack('!d', self._socket.recvfrom(header.length)[0])[0]
+                self._id = struct.unpack('!d', self._socket.recv(header.length))[0]
                 self._logger.info(f"Connected To {self.server_address[0]}:{self.server_address[1]} With {self._id} ID")
                 self._connection_established = True
                 threading.Thread(target=self._send, daemon=True).start()
                 threading.Thread(target=self._recv, daemon=True).start()
                 return True
-        except socket.timeout:
-            self._logger.critical(f"Timeout! Can't Connect To Server")
+
+        except ConnectionRefusedError as e:
+            self._logger.critical(e)
             return False
+
         except Exception as e:
             self._logger.error(e)
             return False
@@ -87,15 +91,15 @@ class CVClient:
     def _recv(self):
         while self.is_connected:
             try:
-                data, _ = self._socket.recvfrom(HEADER_LENGTH)
+                data = self._socket.recv(HEADER_LENGTH)
                 header = Pkt(*struct.unpack('!BI', data))
                 if header.type == TY_FRAME_OK:
                     self._continue_send = True
                 elif header.type == TY_RESULT:
-                    data, _ = self._socket.recvfrom(header.length)
+                    data = self._socket.recv(header.length)
                     orders = pickle.loads(data)
                     self._orders.put(orders)
-            except socket.timeout:
+            except Exception:
                 self._connection_established = False
 
     def _send(self):
@@ -107,20 +111,22 @@ class CVClient:
                     frame = self._queue.get()
                     compressed = zlib.compress(frame)
                     header = struct.pack("!BdI", TY_FRAME, self._id, len(compressed))
-                    chunks = [compressed[i:i+CHUNK_SIZE] for i in range(0, len(compressed), CHUNK_SIZE)]
-                    self._socket.sendto(header, self.server_address)
-                    for chunk in chunks:
-                        self._socket.sendto(chunk, socket.MSG_DONTWAIT, self.server_address)
-
-            except KeyboardInterrupt as e:
+                    self._socket.send(header)
+                    self._socket.send(compressed)
+            except Exception as e:
                 self._logger.error(e)
+                self._connection_established = False
+        else:
+            self._socket.close()
 
     def __del__(self):
         if self._connection_established:
-            self._socket.sendto(struct.pack('!BdI', TY_CLOSE, self._id, 0), self.server_address)
+            self._socket.send(struct.pack('!BdI', TY_CLOSE, self._id, 0))
         self._socket.close()
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     client = CVClient()
+    client.connect()
+    client.disconnect()

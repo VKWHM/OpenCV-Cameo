@@ -34,7 +34,8 @@ class CVServer(object):
     def __init__(self, host="0.0.0.0", port=9999, logger="CVServer"):
         self._logger = logging.getLogger(logger)
         self._logger.debug(f"Initial Class {logger}")
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
         self._grabed = False
         self.host = host
         self.port = port
@@ -54,6 +55,90 @@ class CVServer(object):
     def is_running(self):
         return self._is_running
 
+    def stop_server(self):
+        self._is_running = False
+        self._clients = {}
+        self._queue = queue.Queue()
+        return self.is_running
+
+    def start_server(self):
+        self._socket.bind((self.host, self.port))
+        self._socket.listen(1)
+        self._is_running = True
+        self._logger.info("Start Server To Lisening Incoming Connection")
+        threading.Thread(target=self._accept_client, daemon=True).start()
+
+    def send_order(self, client_id, order):
+        if client_id in self._clients.keys() and self._clients[client_id]['status']:
+            try:
+                socket = self._clients[client_id]['socket']
+                self._logger.info(f"Send {order} Orders To {client_id}")
+                data = pickle.dumps(order)
+                header = struct.pack("!BI", TY_RESULT, len(data))
+                socket.send(header + data)
+            except Exception as e:
+                self._logger.error(e)
+                client = self._clients[id]
+                client.update({'status': False})
+                self._clients[id].update(client)
+                self._logger.info(f"Close Connection From {client['address'][0]}:{client['address'][1]} With {id} ID")
+                socket.close()
+
+    def _receiver(self, id):
+        client_socket = self._clients[id]['socket']
+        while self.is_running and self._clients[id]['status']:
+            try:
+                header = Pkt(*struct.unpack('!BdI', client_socket.recv(HEADER_LENGTH)))
+                if header.id != id:
+                    self._logger.warning(f"Invalid ID. From {id} Received {header.id} ID")
+                    raise
+
+                elif header.type == TY_CLOSE:
+                    raise
+
+                elif header.type == TY_FRAME:
+                    data = client_socket.recv(header.length)
+                    while header.length > len(data):
+                        data += client_socket.recv(header.length - len(data))
+                    self._logger.debug(f"Received Frame Has {header.length//1024}K Size From {header.id}")
+                    self._queue.put((header.id, data))
+                    client_socket.send(struct.pack('!BI', TY_FRAME_OK, 0))
+
+            except Exception:
+                client = self._clients[id]
+                client.update({'status': False})
+                self._clients[id].update(client)
+        else:
+            self._logger.info(f"Close Connection From {client['address'][0]}:{client['address'][1]} With {id} ID")
+            client_socket.close()
+    
+    def _accept_client(self):
+        while self._is_running:
+            self._logger.debug(f"Wait Client To Connect...")
+            client, info = self._socket.accept()
+            try:
+                header = Pkt(*struct.unpack('!BdI', client.recv(HEADER_LENGTH)))
+                if header.type == TY_OPEN:
+                    self._logger.info(f"Accepted Client From {info[0]}:{info[1]}")
+                    id = header.id if header.id != 0 else random.random()
+                    self._clients.update({
+                        id: {
+                            'socket': client,
+                            'address': info,
+                            'status': True
+                        }
+                    })
+                    threading.Thread(target=self._receiver, args=(id,), daemon=True).start()
+                    client.send(struct.pack('!BI', TY_OK, 8) + struct.pack('!d', id))
+                else:
+                    self._logger.debug(f"Deny Connection From {info[0]}:{info[1]}")
+                    client.close()
+            except Exception as e:
+                self._logger.warning(e)
+                client.close()
+        else:
+            self._socket.close()
+
     def isOpened(self, *args, **kwargs):
         if not self.is_running:
             self.start_server()
@@ -65,15 +150,6 @@ class CVServer(object):
                     return True
         return False
 
-    def stop_server(self):
-        self._is_running = False
-        return self.is_running
-
-    def start_server(self):
-        self._socket.bind((self.host, self.port))
-        self._is_running = True
-        self._logger.info("Start Server To Lisening Incoming Connection")
-        threading.Thread(target=self._receiver, daemon=True).start()
 
     def grab(self, *args, **kwargs):
         if len(list(self.clients)):
@@ -99,59 +175,16 @@ class CVServer(object):
         return None, numpy.empty([0, 0], dtype=numpy.uint8)
 
     def read(self, *args, **kwargs):
-        self.grab()
+        if not self.grab():
+            while not len(list(self.clients)):
+                time.sleep(0.5)
+            else:
+                self.grab()
         return self.retrieve()
     
     def get(self, *args, **kwargs):
         return None
 
-    def send_order(self, client_id, order):
-        if client_id in self._clients.keys() and self._clients[client_id]['status']:
-            try:
-                self._logger.info(f"Send {order} Orders To {client_id}")
-                data = pickle.dumps(order)
-                header = struct.pack("!BI", TY_RESULT, len(data))
-                self._socket.sendto(header, self._clients[client_id]['address'])
-                self._socket.sendto(data)
-            except Exception as e:
-                self._logger.error(e)
-                client = self._clients[client_id]
-                client.update({'status': False})
-                self._clients.update(client)
-
-    def _receiver(self):
-        self._logger.debug(f"Wait Client To Connect...")
-        while self.is_running:
-            data, info = self._socket.recvfrom(HEADER_LENGTH)
-            header = Pkt(*struct.unpack('!BdI', data))
-            if header.type == TY_OPEN:
-                self._logger.info(f"Accepted Client From {info[0]}:{info[1]}")
-                id = header.id if header.id != 0 else random.random()
-                self._clients.update({
-                    id: {
-                        'address': info,
-                        'status': True
-                    }
-                })
-                self._socket.sendto(struct.pack('!BI', TY_OK, 8), info)
-                self._socket.sendto(struct.pack('!d', id), info)
-            
-            elif header.type == TY_CLOSE:
-                client = self._clients.get(header.id)
-                client.update({'status': False})
-                self._clients.update({header.id: client})
-                self._logger.info(f"Close Connection From {client['address'][0]}:{client['address'][1]} With {header.id} ID")
-            
-            elif header.type == TY_FRAME:
-                data, _ = self._socket.recvfrom(header.length)
-                while header.length > len(data):
-                    data += self._socket.recvfrom(header.length - len(data))[0]
-                self._logger.debug(f"Received Frame Has {header.length//1024}K Size From {header.id}")
-                self._queue.put((header.id, data))
-                self._socket.sendto(struct.pack('!BI', TY_FRAME_OK, 0), self._clients[header.id]['address'])
-        else:
-            self._socket.close()
-    
     def release(self):
         self._is_running = False
 
@@ -162,3 +195,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     server = CVServer()
     server.start_server()
+    while True:
+        time.sleep(1)

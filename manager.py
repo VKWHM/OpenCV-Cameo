@@ -211,5 +211,5 @@ class WindowManager(object):
         keycode = cv2.waitKey(1)
         if self.keypressCallback is not None and keycode != -1:
             self._logger.debug(f"Process Pressed Key {keycode}")
-            self.keypressCallback(self._windowName, keycode)
+            self.keypressCallback(keycode)
 
