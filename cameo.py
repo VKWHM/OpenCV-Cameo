@@ -56,6 +56,8 @@ class Cameo(object):
                     self._curveFilter.apply(frame, frame)
             self._windowManager.processEvent()
 
+        self._captureManager.close()
+
     def onKeypress(self, keycode):
         """
         Handle a keypress.
@@ -176,6 +178,8 @@ class CameoLabelTaker(object):
         a = 12
         if keycode == 27:  # ESC
             self._windowManager.destroyWindow()
+            self._logger.info(f'Archive Images To {self.filepath}.tar.gz')
+            shutil.make_archive(self.filepath, 'gztar', self.filepath)
         elif keycode == 84:
             x, y, w, h = self.rectSize
             self.rectSize = (x, y+a, w, h)
@@ -207,7 +211,7 @@ class CameoLabelTaker(object):
             self.takeSS = not self.takeSS
         elif keycode == ord('p'):
             self.file = f'{self.filepath}/positive/{self.p_count}.jpg'
-            open(f"{self.filepath}/pos.txt", 'a').write(f"positive/{self.p_count}.jpg 1 {' '.join([str(x) for x in self.rectSize])}\n")
+            open(f"{self.filepath}/positive/{self.p_count}.txt", 'w').write(f"0 {' '.join([str(x) for x in self.rectSize])}\n")
             self.p_count += 1
             self.takeSS = not self.takeSS
         elif keycode == ord('s'):
@@ -217,9 +221,8 @@ class CameoLabelTaker(object):
 
 class CameoServer(Cameo):
     def __init__(self, Capture, address='localhost', logger="CameoServer"):
-        self.address = address
         self._logger = logging.getLogger(logger)
-        self._server = CVServer()
+        self._server = CVServer(address)
         self._captureManager = CaptureManager(
             Capture
         )
@@ -228,11 +231,14 @@ class CameoServer(Cameo):
         """
         Run Main loop.
         """
-        self._server.start_server(self.address)
-        while True:
-            with self._captureManager as frame:
-                if frame is not None:
-                    self._server.send_frame(frame)
+        self._server.start_server()
+        try:
+            while True:
+                with self._captureManager as frame:
+                    if frame is not None:
+                        self._server.send_frame(frame)
+        except KeyboardInterrupt:
+            self._server.stop_server()
 
 class CameoDepth(Cameo):
     def __init__(self, loggerName="CameoDepth"):
@@ -328,6 +334,7 @@ def get_args():
 
 
 if __name__ == "__main__":
+    logging.getLogger('CVServer').setLevel(logging.DEBUG)
     parser = get_args()
     cap, label, client, classifier, address, trash, log = vars(parser.parse_args()).values()
     try:

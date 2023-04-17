@@ -168,6 +168,9 @@ class CaptureManager(object):
         self._logger.debug(f"Write Frame {self._frameElpased}")
         self._videoWriter.write(self._frame)
 
+    def close(self):
+        self._capture.release()
+
 
 
 class WindowManager(object):
